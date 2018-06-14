@@ -157,7 +157,6 @@ class ProxyChain:
             FirstLine = DecodeData.split('\r\n')[0]
             HTTP_method, content, HTTP_version = FirstLine.split(' ')
         except:
-            print('1 ' + FirstLine)
             return ('', '')
         
         if 'CONNECT' == HTTP_method:
@@ -201,7 +200,7 @@ class ProxyChain:
                     self.MySend(self.RemoteSock, ('CONNECT %s:%s HTTP/1.1\r\n\r\n' % (ip, port)).encode())
                 elif 'socks4' == ProxyDict[ProxyList[iter-1]]:
                     self.MySend(self.RemoteSock, b'\x04\x01' + int(port).to_bytes(2, 'big') + \
-                                bytes(map(int, ip.split('.'))))                    
+                                bytes(map(int, ip.split('.'))) + b'\x00')
                 elif 'socks5' == ProxyDict[ProxyList[iter-1]]:
                     self.Socks5Greeting()
                     self.MySend(self.RemoteSock, b'\x05\x01\x00\x01' + bytes(map(int, ip.split('.'))) + \
@@ -259,7 +258,7 @@ class ProxyChain:
                     self.MySend(self.RemoteSock, ('CONNECT %s:%s HTTP/1.1\r\n\r\n' % (ip, port)).encode())
                 elif 'socks4' == ProxyDict[ProxyList[iter-1]]:
                     self.MySend(self.RemoteSock, b'\x04\x01' + int(port).to_bytes(2, 'big') + \
-                                bytes(map(int, ip.split('.'))))                    
+                                bytes(map(int, ip.split('.'))) + b'\x00')
                 elif 'socks5' == ProxyDict[ProxyList[iter-1]]:
                     self.Socks5Greeting()
                     self.MySend(self.RemoteSock, b'\x05\x01\x00\x01' + bytes(map(int, ip.split('.'))) + \
@@ -322,7 +321,7 @@ class ProxyChain:
                     self.MySend(self.RemoteSock, ('CONNECT %s:%s HTTP/1.1\r\n\r\n' % (ip, port)).encode())
                 elif 'socks4' == ProxyDict[ProxyList[iter-1]]:
                     self.MySend(self.RemoteSock, b'\x04\x01' + int(port).to_bytes(2, 'big') + \
-                        bytes(map(int, ip.split('.')))) 
+                        bytes(map(int, ip.split('.'))) + b'\x00')
                 elif 'socks5' == ProxyDict[ProxyList[iter-1]]:
                     self.Socks5Greeting()
                     self.MySend(self.RemoteSock, b'\x05\x01\x00\x01' + bytes(map(int, ip.split('.'))) + \
@@ -384,7 +383,6 @@ class ProxyChain:
         if 'http' == RemoteType and b'HTTP/1.1 4' in self.ByteData:
             self.RemoteSock.close()
             return False
-        #elif 'socks4' == RemoteType and 0x5A != re.findall('.{1,2}', RecvData.hex())[1]:
         elif 'socks4' == RemoteType and 0x5A != self.ByteData[1]:
             self.RemoteSock.close()
             return False
