@@ -66,6 +66,10 @@ class ProxyChain:
                         break
                     else:
                         self.SocketDict[self.sock].send(self.data)
+
+            except KeyboardInterrupt:
+                print('Proxychain stopped!!')
+                sys.exit(1)
             except:
                 pass
 
@@ -211,9 +215,11 @@ class ProxyChain:
             else:
                 if 'http' == ProxyList[iter-1][0]:
                     self.RemoteSock.send(('CONNECT %s:%s HTTP/1.1\r\n\r\n' % (proxy[1], proxy[2])).encode())
+
                 elif 'socks4' == ProxyList[iter-1][0]:
                     self.RemoteSock.send(b'\x04\x01' + int(proxy[2]).to_bytes(2, 'big') + \
                         bytes(map(int, proxy[1].split('.'))) + b'\x00')
+
                 elif 'socks5' == ProxyList[iter-1][0]:
                     self.Socks5Greeting()
                     self.RemoteSock.send(b'\x05\x01\x00\x01' + bytes(map(int, proxy[1].split('.'))) + \
@@ -250,56 +256,58 @@ class ProxyChain:
     def DynamicChain(self, Remote):
         ChainInfo = '|D-chain|'
         iter = 0
-        while iter < len(ProxyList):
+        TempList = ProxyList.copy()
+        while iter < len(TempList):
             # find chain head
             if iter == 0:
                 try:
-                    self.RemoteSock = socket.create_connection((ProxyList[iter][1], ProxyList[iter][2]), timeout=5)
-                    ChainInfo += '-<>-%s:%s' % (ProxyList[iter][1], ProxyList[iter][2])
+                    self.RemoteSock = socket.create_connection((TempList[iter][1], TempList[iter][2]), timeout=5)
+                    ChainInfo += '-<>-%s:%s' % (TempList[iter][1], TempList[iter][2])
                 except:
-                    ProxyList.remove(ProxyList[iter])
-                    if not ProxyList:
+                    TempList.remove(TempList[iter])
+                    if not TempList:
                         ChainInfo += 'No online proxy!'
                         print(ChainInfo)
                         return False
+                    continue
 
             # begin chaining
             else:
-                if 'http' == ProxyList[iter-1][0]:
+                if 'http' == TempList[iter-1][0]:
                     self.RemoteSock.send(('CONNECT %s:%s HTTP/1.1\r\n\r\n' % \
-                        (ProxyList[iter][1], ProxyList[iter][2])).encode())
+                        (TempList[iter][1], TempList[iter][2])).encode())
 
-                elif 'socks4' == ProxyList[iter-1][0]:
+                elif 'socks4' == TempList[iter-1][0]:
                     self.RemoteSock.send(b'\x04\x01' + \
-                        int(ProxyList[iter][2]).to_bytes(2, 'big') + \
-                        bytes(map(int, ProxyList[iter][1].split('.'))) + b'\x00')
+                        int(TempList[iter][2]).to_bytes(2, 'big') + \
+                        bytes(map(int, TempList[iter][1].split('.'))) + b'\x00')
 
-                elif 'socks5' == ProxyList[iter-1][0]:
+                elif 'socks5' == TempList[iter-1][0]:
                     self.Socks5Greeting()
                     self.RemoteSock.send(b'\x05\x01\x00\x01' + \
-                        bytes(map(int, ProxyList[iter][1].split('.'))) + \
-                        int(ProxyList[iter][2]).to_bytes(2, 'big'))
+                        bytes(map(int, TempList[iter][1].split('.'))) + \
+                        int(TempList[iter][2]).to_bytes(2, 'big'))
 
                 RecvData = self.MyRecv(self.RemoteSock)
 
                 try:
                     if (0 == len(RecvData)) or \
-                        ('http' == ProxyList[iter-1][0] and b'HTTP/1.1 4' in RecvData) or \
-                        ('socks4' == ProxyList[iter-1][0] and 0x5A != RecvData[1]) or \
-                        ('socks5' == ProxyList[iter-1][0] and 0x00 != RecvData[1]):
+                        ('http' == TempList[iter-1][0] and b'HTTP/1.1 4' in RecvData) or \
+                        ('socks4' == TempList[iter-1][0] and 0x5A != RecvData[1]) or \
+                        ('socks5' == TempList[iter-1][0] and 0x00 != RecvData[1]):
                         self.RemoteSock.close()
-                        ProxyList.remove(ProxyList[iter])
+                        TempList.remove(TempList[iter])
                         iter = 1
-                        self.RemoteSock = socket.create_connection((ProxyList[0][1], ProxyList[0][2]), timeout=5)
+                        self.RemoteSock = socket.create_connection((TempList[0][1], TempList[0][2]), timeout=5)
                         continue
                 except:
                     continue
 
-                ChainInfo += '-<>-%s:%s' % (ProxyList[iter][1], ProxyList[iter][2])
+                ChainInfo += '-<>-%s:%s' % (TempList[iter][1], TempList[iter][2])
 
             iter += 1
 
-        if False == self.ConnectRemote(Remote, ProxyList):
+        if False == self.ConnectRemote(Remote, TempList):
             ChainInfo += '- >< -%s:%s' % (Remote[1], Remote[2])
             print(ChainInfo)
             return False
@@ -310,47 +318,59 @@ class ProxyChain:
 
     def RandomChain(self, Remote):
         ChainInfo = '|R-chain|'
-        ChainHeadIP, ChainHeadPort = '', ''
-        RandomProxyList = random.sample(ProxyList, ChainLength)
-        for iter, proxy in enumerate(RandomProxyList):
-            # connect chain head
-            if ('', '') == (ChainHeadIP, ChainHeadPort):
+        iter = 0
+        TempList = random.sample(ProxyList, ChainLength)
+        while iter < len(TempList):
+            # find chain head
+            if iter == 0:
                 try:
-                    self.RemoteSock = socket.create_connection((proxy[1], proxy[2]), timeout=5)
-                    ChainHeadIP, ChainHeadPort = proxy[1], proxy[2]
-                    ChainInfo += '-<>-%s:%s' % (proxy[1], proxy[2])
+                    self.RemoteSock = socket.create_connection((TempList[iter][1], TempList[iter][2]), timeout=5)
+                    ChainInfo += '-<>-%s:%s' % (TempList[iter][1], TempList[iter][2])
                 except:
-                    ChainInfo += '-><-%s:%s' % (proxy[1], proxy[2])
-                    print(ChainInfo)
-                    return False
+                    TempList.remove(TempList[iter])
+                    if not TempList:
+                        ChainInfo += 'No online proxy!'
+                        print(ChainInfo)
+                        return False
+                    continue
 
             # begin chaining
             else:
-                if 'http' == RandomProxyList[iter-1][0]:
-                    self.RemoteSock.send(('CONNECT %s:%s HTTP/1.1\r\n\r\n' % (proxy[1], proxy[2])).encode())
-                elif 'socks4' == RandomProxyList[iter-1][0]:
-                    self.RemoteSock.send(b'\x04\x01' + int(proxy[2]).to_bytes(2, 'big') + \
-                        bytes(map(int, proxy[1].split('.'))) + b'\x00')
-                elif 'socks5' == RandomProxyList[iter-1][0]:
+                if 'http' == TempList[iter-1][0]:
+                    self.RemoteSock.send(('CONNECT %s:%s HTTP/1.1\r\n\r\n' % \
+                        (TempList[iter][1], TempList[iter][2])).encode())
+
+                elif 'socks4' == TempList[iter-1][0]:
+                    self.RemoteSock.send(b'\x04\x01' + \
+                        int(TempList[iter][2]).to_bytes(2, 'big') + \
+                        bytes(map(int, TempList[iter][1].split('.'))) + b'\x00')
+
+                elif 'socks5' == TempList[iter-1][0]:
                     self.Socks5Greeting()
-                    self.RemoteSock.send(b'\x05\x01\x00\x01' + bytes(map(int, proxy[1].split('.'))) + \
-                                int(proxy[2]).to_bytes(2, 'big'))
+                    self.RemoteSock.send(b'\x05\x01\x00\x01' + \
+                        bytes(map(int, TempList[iter][1].split('.'))) + \
+                        int(TempList[iter][2]).to_bytes(2, 'big'))
 
                 RecvData = self.MyRecv(self.RemoteSock)
+
                 try:
                     if (0 == len(RecvData)) or \
-                        ('http' == RandomProxyList[iter-1][0] and b'HTTP/1.1 4' in RecvData) or \
-                        ('socks4' == RandomProxyList[iter-1][0] and 0x5A != RecvData[1]) or \
-                        ('socks5' == RandomProxyList[iter-1][0] and 0x00 != RecvData[1]):
+                        ('http' == TempList[iter-1][0] and b'HTTP/1.1 4' in RecvData) or \
+                        ('socks4' == TempList[iter-1][0] and 0x5A != RecvData[1]) or \
+                        ('socks5' == TempList[iter-1][0] and 0x00 != RecvData[1]):
                         self.RemoteSock.close()
-                        self.RemoteSock = socket.create_connection((ChainHeadIP, ChainHeadPort), timeout=5)
+                        TempList.remove(TempList[iter])
+                        iter = 1
+                        self.RemoteSock = socket.create_connection((TempList[0][1], TempList[0][2]), timeout=5)
                         continue
                 except:
                     continue
 
-                ChainInfo += '-<>-%s:%s' % (proxy[1], proxy[2])
+                ChainInfo += '-<>-%s:%s' % (TempList[iter][1], TempList[iter][2])
 
-        if False == self.ConnectRemote(Remote):
+            iter += 1
+
+        if False == self.ConnectRemote(Remote, TempList):
             ChainInfo += '- >< -%s:%s' % (Remote[1], Remote[2])
             print(ChainInfo)
             return False
@@ -359,57 +379,37 @@ class ProxyChain:
         print(ChainInfo)
         return True
 
-    def MyRecv(self, sock, timeout = 2):
+    def MyRecv(self, sock):
         return sock.recv(buffer_size)
         '''
-        #make socket non blocking
-        sock.setblocking(0)
-
-        #total data partwise in an array
-        total_data = [ ];
-        data = '';
-
-        # beginning time
-        begin = time.time()
-        while 1:
-            #if you got some data, then break after timeout
-            if total_data and time.time() - begin > timeout:
-                break
-
-            #if you got no data at all, wait a little longer, twice the timeout
-            elif time.time() - begin > timeout * 2:
-                break
-
-            #recv something
-            try:
-                data = the_socket.recv(8192)
-                if data:
-                    total_data.append(data)
-                    #change the beginning time for measurement
-                    begin = time.time()
-                else:
-                    #sleep for sometime to indicate a gap
-                    time.sleep(0.1)
-            except:
-                pass
-
-        #join all parts to make final string
-        return ''.join(total_data)
+        try:
+            total_data = b''
+            while 1:
+                data = sock.recv(buffer_size)
+                if b'' == data:
+                    break
+                total_data += data
+            return total_data
+        except:
+            return total_data
         '''
+
 
     def ConnectRemote(self, Remote, ProxyList):
         if 'http' == ProxyList[-1][0]:
             self.RemoteSock.send(('CONNECT %s:%s HTTP/1.1\r\n\r\n' % (Remote[1], Remote[2])).encode())
+
         elif 'socks4' == ProxyList[-1][0]:
             self.RemoteSock.send(b'\x04\x01' + int(Remote[2]).to_bytes(2, 'big') + \
                 bytes(map(int, Remote[1].split('.'))) + b'\x00')
-        if 'socks5' == ProxyList[-1][0]:
+
+        elif 'socks5' == ProxyList[-1][0]:
             Socks5Greeting()
             self.RemoteSock.send(b'\x05\x01\x00\x01' + bytes(map(int, proxy[1].split('.'))) + \
                 int(proxy[2]).to_bytes(2, 'big'))
 
         RecvData = self.MyRecv(self.RemoteSock)
-        print(RecvData)
+
         if 0 == len(RecvData) or \
             'http' == ProxyList[-1][0] and b'HTTP/1.1 4' in RecvData or \
             'socks4' == ProxyList[-1][0] and 0x5A != RecvData[1] or \
@@ -425,8 +425,4 @@ class ProxyChain:
 
 if __name__ == '__main__':
     proxychain = ProxyChain('', 9999)
-    try:
-        proxychain.Main()
-    except KeyboardInterrupt:
-        print('Proxychain stopped!!')
-        sys.exit(1)
+    proxychain.Main()
